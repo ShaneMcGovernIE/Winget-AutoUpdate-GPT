@@ -6,9 +6,17 @@ if ( $psversionTable.PSEdition -eq "core" ) {
 #Get the Working Dir
 $Script:WorkingDir = $PSScriptRoot
 
+#Log file for functions
+$Script:LogFile = "$env:TEMP\WAU-GUI.log"
+
+#Flag to avoid concurrent updates
+$Script:UpdateRunning = $false
+
 
 <# FUNCTIONS #>
 . "$WorkingDir\functions\Get-WingetCmd.ps1"
+. "$WorkingDir\functions\Write-ToLog.ps1"
+. "$WorkingDir\functions\Get-WingetOutdatedApps.ps1"
 
 #Function to start or update popup
 Function Start-PopUp ($Message) {
@@ -156,6 +164,7 @@ function Start-InstallGUI {
     </TabControl>
     <Button x:Name="CloseButton" Content="Close" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,10" Width="90" Height="24"/>
     <Button x:Name="InstallButton" Content="Install" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,105,10" Width="90" Height="24"/>
+    <Button x:Name="UpdateButton" Content="Update" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,200,10" Width="90" Height="24"/>
     <TextBlock x:Name="WAUConfiguratorLinkLabel" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="10,0,0,14">
         <Hyperlink NavigateUri="https://github.com/Romanitho/Winget-AutoUpdate">More info about WAU</Hyperlink>
     </TextBlock>
@@ -184,6 +193,12 @@ function Start-InstallGUI {
     $WAUListOpenFile = New-Object System.Windows.Forms.OpenFileDialog
     $WAUListOpenFile.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*"
     $WAUAppInstallerGUI.Icon = $IconBase64
+
+    #Disable update button if no updates are available
+    $InitialUpdates = Get-WingetOutdatedApps -src 'winget'
+    if (-not $InitialUpdates -or $InitialUpdates -is [string]) {
+        $UpdateButton.IsEnabled = $false
+    }
 
 
     ### FORM ACTIONS ###
@@ -309,6 +324,39 @@ function Start-InstallGUI {
     $WAUConfiguratorLinkLabel.Add_PreviewMouseDown(
         {
             [System.Diagnostics.Process]::Start("https://github.com/Romanitho/Winget-AutoUpdate")
+        }
+    )
+
+    $UpdateButton.add_click(
+        {
+            if ($Script:UpdateRunning) { return }
+            $Script:UpdateRunning = $true
+            $UpdateButton.IsEnabled = $false
+            Start-PopUp "Checking updates..."
+            $outdated = Get-WingetOutdatedApps -src 'winget'
+            if (-not $outdated -or $outdated -is [string]) {
+                Start-PopUp "No update found."
+                Start-Sleep 2
+                Close-PopUp
+                $Script:UpdateRunning = $false
+                return
+            }
+            Start-PopUp "Updating applications..."
+            $WAUInstallPath = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\Romanitho\Winget-AutoUpdate\" -Name InstallLocation
+            try {
+                Start-Process "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File \"\"$WAUInstallPath\Winget-Upgrade.ps1\"\"" -Wait -Verb RunAs
+            }
+            catch {
+                Start-Process "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File \"\"$WAUInstallPath\Winget-Upgrade.ps1\"\"" -Wait
+            }
+            Start-PopUp "Done!"
+            Start-Sleep 2
+            Close-PopUp
+            $remaining = Get-WingetOutdatedApps -src 'winget'
+            if ($remaining -and $remaining -isnot [string]) {
+                $UpdateButton.IsEnabled = $true
+            }
+            $Script:UpdateRunning = $false
         }
     )
 
