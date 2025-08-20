@@ -71,6 +71,7 @@ else {
 . "$realPath\functions\Write-ToLog.ps1"
 . "$realPath\functions\Confirm-Installation.ps1"
 . "$realPath\functions\Compare-SemVer.ps1"
+. "$realPath\functions\Build-WingetArgs.ps1"
 
 #Check if App exists in Winget Repository
 function Confirm-Exist ($AppID) {
@@ -148,18 +149,16 @@ function Install-App ($AppID, $AppArgs) {
         #Install App
         Write-ToLog "-> Installing $AppID..." "DarkYellow"
         if ($ModsOverride) {
-            Write-ToLog "-> Arguments (overriding default): $ModsOverride" # Without -h (user overrides default)
-            $WingetArgs = "install --id $AppID -e --accept-package-agreements --accept-source-agreements -s winget --override $ModsOverride" -split " "
+            $WingetArgs, $WingetLog = Build-WingetArgs -CommandType install -AppId $AppID -Override $ModsOverride
         }
         elseif ($ModsCustom) {
-            Write-ToLog "-> Arguments (customizing default): $ModsCustom" # With -h (user customizes default)
-            $WingetArgs = "install --id $AppID -e --accept-package-agreements --accept-source-agreements -s winget -h --custom $ModsCustom" -split " "
+            $WingetArgs, $WingetLog = Build-WingetArgs -CommandType install -AppId $AppID -Custom "--custom $ModsCustom"
         }
         else {
-            $WingetArgs = "install --id $AppID -e --accept-package-agreements --accept-source-agreements -s winget -h $AppArgs" -split " "
+            $WingetArgs, $WingetLog = Build-WingetArgs -CommandType install -AppId $AppID -Custom $AppArgs
         }
 
-        Write-ToLog "-> Running: `"$Winget`" $WingetArgs"
+        Write-ToLog "-> $WingetLog"
         & "$Winget" $WingetArgs | Where-Object { $_ -notlike "   *" } | Tee-Object -file $LogFile -Append
 
         if ($ModsInstall) {
@@ -210,8 +209,8 @@ function Uninstall-App ($AppID, $AppArgs) {
 
         #Uninstall App
         Write-ToLog "-> Uninstalling $AppID..." "DarkYellow"
-        $WingetArgs = "uninstall --id $AppID -e --accept-source-agreements -h $AppArgs" -split " "
-        Write-ToLog "-> Running: `"$Winget`" $WingetArgs"
+        $WingetArgs, $WingetLog = Build-WingetArgs -CommandType uninstall -AppId $AppID -Custom $AppArgs
+        Write-ToLog "-> $WingetLog"
         & "$Winget" $WingetArgs | Where-Object { $_ -notlike "   *" } | Tee-Object -file $LogFile -Append
 
         if ($ModsUninstall) {
