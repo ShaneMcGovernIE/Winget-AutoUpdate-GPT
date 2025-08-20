@@ -57,56 +57,18 @@ Function Close-PopUp {
 }
 
 function Get-WingetAppInfo ($SearchApp) {
-    class Software {
-        [string]$Name
-        [string]$Id
+    try {
+        $result = & $Winget search $SearchApp --accept-source-agreements --source winget --output json | ConvertFrom-Json
+    }
+    catch {
+        return @()
     }
 
-    #Search for winget apps
-    $AppResult = & $Winget search $SearchApp --accept-source-agreements --source winget | Out-String
+    $packages = $result |
+        Select-Object -ExpandProperty Sources -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty Packages -ErrorAction SilentlyContinue
 
-    #Start Conversion of winget format to an array. Check if "-----" exists
-    if (!($AppResult -match "-----")) {
-        Start-PopUp "No application found!"
-        Start-Sleep 2
-        Close-PopUp
-        return
-    }
-
-    #Split winget output to lines
-    $lines = $AppResult.Split([Environment]::NewLine) | Where-Object { $_ }
-
-    # Find the line that starts with "------"
-    $fl = 0
-    while (-not $lines[$fl].StartsWith("-----")) {
-        $fl++
-    }
-
-    $fl = $fl - 1
-
-    #Get header titles [without remove separator]
-    $index = $lines[$fl] -split '(?<=\s)(?!\s)'
-
-    # Line $fl has the header, we can find char where we find ID and Version [and manage non latin characters]
-    $idStart = $($index[0] -replace '[\u4e00-\u9fa5]', '**').Length
-    $versionStart = $idStart + $($index[1] -replace '[\u4e00-\u9fa5]', '**').Length
-
-    # Now cycle in real package and split accordingly
-    $searchList = @()
-    For ($i = $fl + 2; $i -le $lines.Length; $i++) {
-        $line = $lines[$i] -replace "[\u2026]", " " #Fix "..." in long names
-        # If line contains an ID (Alphanumeric | Literal "." | Alphanumeric)
-        if ($line -match "\w\.\w") {
-            $software = [Software]::new()
-            #Manage non latin characters
-            $nameDeclination = $($line.Substring(0, $idStart) -replace '[\u4e00-\u9fa5]', '**').Length - $line.Substring(0, $idStart).Length
-            $software.Name = $line.Substring(0, $idStart - $nameDeclination).TrimEnd()
-            $software.Id = $line.Substring($idStart - $nameDeclination, $versionStart - $idStart).TrimEnd()
-            #add formatted soft to list
-            $searchList += $software
-        }
-    }
-    return $searchList
+    return $packages
 }
 
 function Get-WingetInstalledApps {
@@ -232,17 +194,23 @@ function Start-InstallGUI {
     $SearchButton.add_click(
         {
             if ($SearchTextBox.Text) {
-                Start-PopUp "Searching..."
-                $SubmitComboBox.Items.Clear()
-                $List = Get-WingetAppInfo $SearchTextBox.Text
-                foreach ($L in $List) {
-                    $SubmitComboBox.Items.Add($L.ID)
-                }
-                $SubmitComboBox.SelectedIndex = 0
+            Start-PopUp "Searching..."
+            $SubmitComboBox.Items.Clear()
+            $List = Get-WingetAppInfo $SearchTextBox.Text
+            if (-not $List) {
+                Start-PopUp "No application found!"
+                Start-Sleep 2
                 Close-PopUp
+                return
             }
+            foreach ($L in $List) {
+                $SubmitComboBox.Items.Add($L.PackageIdentifier)
+            }
+            $SubmitComboBox.SelectedIndex = 0
+            Close-PopUp
         }
-    )
+    }
+)
 
     $SubmitButton.add_click(
         {
