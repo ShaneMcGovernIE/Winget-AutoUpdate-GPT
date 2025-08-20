@@ -168,6 +168,12 @@ This helps prevent many devices from running the task at the exact same time. Th
 ### DONOTRUNONMETERED
 Default value 1. Set `DONOTRUNONMETERED=0` to force WAU to run on metered connections. May add cellular data costs on shared connexion from smartphone for example.
 
+### NETWORKTIMEOUTSECONDS
+Maximum time in seconds WAU waits for an internet connection before aborting. Default value 300.
+
+### NETWORKRETRYINTERVALSECONDS
+Seconds between connection attempts while waiting for an internet connection. Default value 10.
+
 ### MAXLOGFILES
 Specify number of allowed log files.<br>
 Default is 3 out of 0-99:<br>

@@ -172,7 +172,10 @@ Write-ToLog "Notification Level: $($WAUConfig.WAU_NotificationLevel). Notificati
 #endregion
 
 #Check network connectivity
-if (Test-Network) {
+$testNetworkParams = @{}
+if ($WAUConfig.WAU_NetworkTimeoutSeconds) { $testNetworkParams.TimeoutSeconds = $WAUConfig.WAU_NetworkTimeoutSeconds }
+if ($WAUConfig.WAU_NetworkRetryIntervalSeconds) { $testNetworkParams.RetryIntervalSeconds = $WAUConfig.WAU_NetworkRetryIntervalSeconds }
+if (Test-Network @testNetworkParams) {
 
     #Check prerequisites
     if ($true -eq $IsSystem) {

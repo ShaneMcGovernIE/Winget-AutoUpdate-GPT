@@ -1,34 +1,33 @@
-#Function to check the connectivity
-
+<#
+.SYNOPSIS
+    Checks for internet connectivity.
+.PARAMETER TimeoutSeconds
+    Total number of seconds to wait for connectivity before timing out. Default: 300.
+.PARAMETER RetryIntervalSeconds
+    Seconds to wait between connection attempts. Default: 10.
+#>
 function Test-Network {
+    [CmdletBinding()]
+    param(
+        [int]$TimeoutSeconds = 300,
+        [int]$RetryIntervalSeconds = 10
+    )
 
-    # Init
-    $timeout = 0
-
-    #Test connectivity during 30 min then timeout
     Write-ToLog "Checking internet connection..." "Yellow"
 
     try {
         $NlaRegKey = "HKLM:\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters\Internet"
         $ncsiHost = Get-ItemPropertyValue -Path $NlaRegKey -Name ActiveWebProbeHost
-        $ncsiPath = Get-ItemPropertyValue -Path $NlaRegKey -Name ActiveWebProbePath
-        $ncsiContent = Get-ItemPropertyValue -Path $NlaRegKey -Name ActiveWebProbeContent
     }
     catch {
         $ncsiHost = "www.msftconnecttest.com"
-        $ncsiPath = "connecttest.txt"
-        $ncsiContent = "Microsoft Connect Test"
     }
 
-    while ($timeout -lt 1800) {
-        try {
-            $ncsiResponse = Invoke-WebRequest -Uri "http://$($ncsiHost)/$($ncsiPath)" -UseBasicParsing -UserAgent ([Microsoft.PowerShell.Commands.PSUserAgent]::Chrome); # DevSkim: ignore DS137138 Insecure URL
-        }
-        catch {
-            $ncsiResponse = $false
-        }
+    $stopWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $notifSent = $false
 
-        if (($ncsiResponse) -and ($ncsiResponse.StatusCode -eq 200) -and ($ncsiResponse.content -eq $ncsiContent)) {
+    while ($stopWatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+        if (Test-Connection -TargetName $ncsiHost -Quiet -Count 1 -ErrorAction SilentlyContinue) {
             Write-ToLog "Connected !" "Green"
 
             # Check for metered connection
@@ -63,10 +62,7 @@ function Test-Network {
             }
         }
         else {
-            Start-Sleep 10
-            $timeout += 10
-
-            if ($timeout -eq 300) {
+            if (-not $notifSent -and $stopWatch.Elapsed.TotalSeconds -ge 300) {
                 Write-ToLog "Notify 'No connection' sent." "Yellow"
 
                 $Title = $NotifLocale.local.outputs.output[0].title
@@ -74,7 +70,10 @@ function Test-Network {
                 $MessageType = "warning"
                 $Balise = "Connection"
                 Start-NotifTask -Title $Title -Message $Message -MessageType $MessageType -Balise $Balise
+                $notifSent = $true
             }
+
+            Start-Sleep -Seconds $RetryIntervalSeconds
         }
     }
 
