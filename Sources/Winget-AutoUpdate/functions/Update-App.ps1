@@ -32,45 +32,20 @@ Function Update-App ($app) {
         }
     }
 
-	# Define upgrade base parameters
-	$baseParams = @(
-		"upgrade", 
-		"--id", "$($app.Id)", 
-		"-e", 
-		"--accept-package-agreements", 
-		"--accept-source-agreements", 
-		"-s", "winget"
-	)
+        if ($ModsOverride) {
+            $WingetArgs, $WingetLog = Build-WingetArgs -CommandType upgrade -AppId $app.Id -Override $ModsOverride
+        }
+        elseif ($ModsCustom) {
+            $WingetArgs, $WingetLog = Build-WingetArgs -CommandType upgrade -AppId $app.Id -Custom "--custom $ModsCustom"
+        }
+        else {
+            $WingetArgs, $WingetLog = Build-WingetArgs -CommandType upgrade -AppId $app.Id
+        }
 
-	# Define base log message
-	$baseLogMessage = "Winget upgrade --id $($app.Id) -e --accept-package-agreements --accept-source-agreements -s winget"
+        Write-ToLog "-> $WingetLog"
 
-	# Determine which parameters and log message to use
-	if ($ModsOverride) {
-		$allParams = $baseParams + @("--override", "$ModsOverride")
-		$logPrefix = "Running (overriding default):"
-		$logSuffix = "--override $ModsOverride"
-	} 
-	elseif ($ModsCustom) {
-		$allParams = $baseParams + @("-h", "--custom", "$ModsCustom")
-		$logPrefix = "Running (customizing default):"
-		$logSuffix = "-h --custom $ModsCustom"
-	} 
-	else {
-		$allParams = $baseParams + @("-h")
-		$logPrefix = "Running:"
-		$logSuffix = "-h"
-	}
-
-	# Build the log message
-	$logMessage = "$logPrefix $baseLogMessage $logSuffix"
-
-	# Log the command
-	Write-ToLog "-> $logMessage"
-
-	# Execute command and log results
-	& $Winget $allParams | Where-Object { $_ -notlike "   *" } | 
-		Tee-Object -file $LogFile -Append
+        & $Winget $WingetArgs | Where-Object { $_ -notlike "   *" } |
+                Tee-Object -file $LogFile -Append
 
     if ($ModsUpgrade) {
         Write-ToLog "Modifications for $($app.Id) during upgrade are being applied..." "DarkYellow"
@@ -97,45 +72,19 @@ Function Update-App ($app) {
 
             Write-ToLog "-> An upgrade for $($app.Name) failed, now trying an install instead... ($retry/2)" "DarkYellow"
 
-            # Define install base parameters
-            $baseParams = @(
-                "install", 
-                "--id", "$($app.Id)", 
-                "-e", 
-                "--accept-package-agreements", 
-                "--accept-source-agreements", 
-                "-s", "winget",
-                "--force"
-            )
-
-            # Define base log message
-            $baseLogMessage = "Winget install --id $($app.Id) -e --accept-package-agreements --accept-source-agreements -s winget --force"
-
-            # Determine which parameters and log message to use
             if ($ModsOverride) {
-                $allParams = $baseParams + @("--override", "$ModsOverride")
-                $logPrefix = "Running (overriding default):"
-                $logSuffix = "--override $ModsOverride"
-            } 
+                $WingetArgs, $WingetLog = Build-WingetArgs -CommandType install -AppId $app.Id -Override $ModsOverride -AdditionalParams @('--force')
+            }
             elseif ($ModsCustom) {
-                $allParams = $baseParams + @("-h", "--custom", "$ModsCustom")
-                $logPrefix = "Running (customizing default):"
-                $logSuffix = "-h --custom $ModsCustom"
-            } 
+                $WingetArgs, $WingetLog = Build-WingetArgs -CommandType install -AppId $app.Id -Custom "--custom $ModsCustom" -AdditionalParams @('--force')
+            }
             else {
-                $allParams = $baseParams + @("-h")
-                $logPrefix = "Running:"
-                $logSuffix = "-h"
+                $WingetArgs, $WingetLog = Build-WingetArgs -CommandType install -AppId $app.Id -AdditionalParams @('--force')
             }
 
-            # Build the log message
-            $logMessage = "$logPrefix $baseLogMessage $logSuffix"
+            Write-ToLog "-> $WingetLog"
 
-            # Log the command
-            Write-ToLog "-> $logMessage"
-
-            # Execute command and log results
-            & $Winget $allParams | Where-Object { $_ -notlike "   *" } | 
+            & $Winget $WingetArgs | Where-Object { $_ -notlike "   *" } |
                 Tee-Object -file $LogFile -Append
 
             if ($ModsInstall) {
