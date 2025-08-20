@@ -68,6 +68,7 @@ else {
 . "$realPath\functions\Update-StoreApps.ps1"
 . "$realPath\functions\Add-ScopeMachine.ps1"
 . "$realPath\functions\Get-WingetCmd.ps1"
+. "$realPath\functions\New-LogWriter.ps1"
 . "$realPath\functions\Write-ToLog.ps1"
 . "$realPath\functions\Confirm-Installation.ps1"
 . "$realPath\functions\Compare-SemVer.ps1"
@@ -79,11 +80,11 @@ function Confirm-Exist ($AppID) {
 
     #Return if AppID exists
     if ($WingetApp -match [regex]::Escape($AppID)) {
-        Write-ToLog "-> $AppID exists on Winget Repository." "Cyan"
+        Write-ToLog "-> $AppID exists on Winget Repository." "Cyan" -LogWriter $LogWriter
         return $true
     }
     else {
-        Write-ToLog "-> $AppID does not exist on Winget Repository! Check spelling." "Red"
+        Write-ToLog "-> $AppID does not exist on Winget Repository! Check spelling." "Red" -LogWriter $LogWriter
         return $false
     }
 }
@@ -137,43 +138,43 @@ function Install-App ($AppID, $AppArgs) {
 
         #If PreInstall script exist
         if ($ModsPreInstall) {
-            Write-ToLog "Modifications for $AppID before install are being applied..." "DarkYellow"
+            Write-ToLog "Modifications for $AppID before install are being applied..." "DarkYellow" -LogWriter $LogWriter
             $preInstallResult = & "$ModsPreInstall"
             if ($preInstallResult -eq $false) {
-                Write-ToLog "PreInstall script for $AppID requested to skip this installation" "Yellow"
+                Write-ToLog "PreInstall script for $AppID requested to skip this installation" "Yellow" -LogWriter $LogWriter
                 return  # Exit the function early
             }
         }
 
         #Install App
-        Write-ToLog "-> Installing $AppID..." "DarkYellow"
+        Write-ToLog "-> Installing $AppID..." "DarkYellow" -LogWriter $LogWriter
         if ($ModsOverride) {
-            Write-ToLog "-> Arguments (overriding default): $ModsOverride" # Without -h (user overrides default)
+            Write-ToLog "-> Arguments (overriding default): $ModsOverride" # Without -h (user overrides default) -LogWriter $LogWriter
             $WingetArgs = "install --id $AppID -e --accept-package-agreements --accept-source-agreements -s winget --override $ModsOverride" -split " "
         }
         elseif ($ModsCustom) {
-            Write-ToLog "-> Arguments (customizing default): $ModsCustom" # With -h (user customizes default)
+            Write-ToLog "-> Arguments (customizing default): $ModsCustom" # With -h (user customizes default) -LogWriter $LogWriter
             $WingetArgs = "install --id $AppID -e --accept-package-agreements --accept-source-agreements -s winget -h --custom $ModsCustom" -split " "
         }
         else {
             $WingetArgs = "install --id $AppID -e --accept-package-agreements --accept-source-agreements -s winget -h $AppArgs" -split " "
         }
 
-        Write-ToLog "-> Running: `"$Winget`" $WingetArgs"
+        Write-ToLog "-> Running: `"$Winget`" $WingetArgs" -LogWriter $LogWriter
         & "$Winget" $WingetArgs | Where-Object { $_ -notlike "   *" } | Tee-Object -file $LogFile -Append
 
         if ($ModsInstall) {
-            Write-ToLog "-> Modifications for $AppID during install are being applied..." "DarkYellow"
+            Write-ToLog "-> Modifications for $AppID during install are being applied..." "DarkYellow" -LogWriter $LogWriter
             & "$ModsInstall"
         }
 
         #Check if install is ok
         $IsInstalled = Confirm-Installation $AppID
         if ($IsInstalled) {
-            Write-ToLog "-> $AppID successfully installed." "Green"
+            Write-ToLog "-> $AppID successfully installed." "Green" -LogWriter $LogWriter
 
             if ($ModsInstalled) {
-                Write-ToLog "-> Modifications for $AppID after install are being applied..." "DarkYellow"
+                Write-ToLog "-> Modifications for $AppID after install are being applied..." "DarkYellow" -LogWriter $LogWriter
                 & "$ModsInstalled"
             }
 
@@ -183,11 +184,11 @@ function Install-App ($AppID, $AppArgs) {
             }
         }
         else {
-            Write-ToLog "-> $AppID installation failed!" "Red"
+            Write-ToLog "-> $AppID installation failed!" "Red" -LogWriter $LogWriter
         }
     }
     else {
-        Write-ToLog "-> $AppID is already installed." "Cyan"
+        Write-ToLog "-> $AppID is already installed." "Cyan" -LogWriter $LogWriter
     }
 }
 
@@ -200,31 +201,31 @@ function Uninstall-App ($AppID, $AppArgs) {
 
         #If PreUninstall script exist
         if ($ModsPreUninstall) {
-            Write-ToLog "Modifications for $AppID before uninstall are being applied..." "DarkYellow"
+            Write-ToLog "Modifications for $AppID before uninstall are being applied..." "DarkYellow" -LogWriter $LogWriter
             $preUnInstallResult = & "$ModsPreUnInstall"
             if ($preUnInstallResult -eq $false) {
-                Write-ToLog "PreUnInstall script for $AppID requested to skip this uninstallation" "Yellow"
+                Write-ToLog "PreUnInstall script for $AppID requested to skip this uninstallation" "Yellow" -LogWriter $LogWriter
                 return  # Exit the function early
             }
         }
 
         #Uninstall App
-        Write-ToLog "-> Uninstalling $AppID..." "DarkYellow"
+        Write-ToLog "-> Uninstalling $AppID..." "DarkYellow" -LogWriter $LogWriter
         $WingetArgs = "uninstall --id $AppID -e --accept-source-agreements -h $AppArgs" -split " "
-        Write-ToLog "-> Running: `"$Winget`" $WingetArgs"
+        Write-ToLog "-> Running: `"$Winget`" $WingetArgs" -LogWriter $LogWriter
         & "$Winget" $WingetArgs | Where-Object { $_ -notlike "   *" } | Tee-Object -file $LogFile -Append
 
         if ($ModsUninstall) {
-            Write-ToLog "-> Modifications for $AppID during uninstall are being applied..." "DarkYellow"
+            Write-ToLog "-> Modifications for $AppID during uninstall are being applied..." "DarkYellow" -LogWriter $LogWriter
             & "$ModsUninstall"
         }
 
         #Check if uninstall is ok
         $IsInstalled = Confirm-Installation $AppID
         if (!($IsInstalled)) {
-            Write-ToLog "-> $AppID successfully uninstalled." "Green"
+            Write-ToLog "-> $AppID successfully uninstalled." "Green" -LogWriter $LogWriter
             if ($ModsUninstalled) {
-                Write-ToLog "-> Modifications for $AppID after uninstall are being applied..." "DarkYellow"
+                Write-ToLog "-> Modifications for $AppID after uninstall are being applied..." "DarkYellow" -LogWriter $LogWriter
                 & "$ModsUninstalled"
             }
 
@@ -234,11 +235,11 @@ function Uninstall-App ($AppID, $AppArgs) {
             }
         }
         else {
-            Write-ToLog "-> $AppID uninstall failed!" "Red"
+            Write-ToLog "-> $AppID uninstall failed!" "Red" -LogWriter $LogWriter
         }
     }
     else {
-        Write-ToLog "-> $AppID is not installed." "Cyan"
+        Write-ToLog "-> $AppID is not installed." "Cyan" -LogWriter $LogWriter
     }
 }
 
@@ -251,7 +252,7 @@ function Add-WAUWhiteList ($AppID) {
         if (!(Test-Path $WhiteList)) {
             New-Item -ItemType File -Path $WhiteList -Force -ErrorAction SilentlyContinue
         }
-        Write-ToLog "-> Add $AppID to WAU included_apps.txt"
+        Write-ToLog "-> Add $AppID to WAU included_apps.txt" -LogWriter $LogWriter
         #Add App to "included_apps.txt"
         Add-Content -Path $WhiteList -Value "`n$AppID" -Force
         #Remove duplicate and blank lines
@@ -265,7 +266,7 @@ function Remove-WAUWhiteList ($AppID) {
     #Check if WAU default install path exists
     $WhiteList = "$WAUInstallLocation\included_apps.txt"
     if (Test-Path $WhiteList) {
-        Write-ToLog "-> Remove $AppID from WAU included_apps.txt"
+        Write-ToLog "-> Remove $AppID from WAU included_apps.txt" -LogWriter $LogWriter
         #Remove app from list
         $file = Get-Content $WhiteList | Where-Object { $_ -ne "$AppID" }
         $file | Out-File $WhiteList
@@ -288,7 +289,7 @@ if ($psISE) {
         $null = Start-Process "cmd.exe" -ArgumentList "/c """ -NoNewWindow -Wait -WindowStyle Hidden
     }
     catch {
-        Write-ToLog "-> Unable to execute cmd.exe - skipping ISE output encoding workaround." "Red"
+        Write-ToLog "-> Unable to execute cmd.exe - skipping ISE output encoding workaround." "Red" -LogWriter $LogWriter
     }
 }
 # Set UTF-8 encoding for all console output (e.g., Write-Output, Write-Host, etc.)
@@ -332,17 +333,21 @@ else {
 if (!(Test-Path $LogPath)) {
     New-Item -ItemType Directory -Force -Path $LogPath | Out-Null
 }
+$LogWriter = New-LogWriter -LogFile $Script:LogFile
+$global:LogWriter = $LogWriter
+
+try {
 
 #Log Header
 if ($Uninstall) {
-    Write-ToLog -LogMsg "NEW UNINSTALL REQUEST" -LogColor "Magenta" -IsHeader
+    Write-ToLog -LogMsg "NEW UNINSTALL REQUEST" -LogColor "Magenta" -IsHeader -LogWriter $LogWriter
 }
 else {
-    Write-ToLog -LogMsg "NEW INSTALL REQUEST" -LogColor "Magenta" -IsHeader
+    Write-ToLog -LogMsg "NEW INSTALL REQUEST" -LogColor "Magenta" -IsHeader -LogWriter $LogWriter
 }
 
 if ($IsElevated -eq $True) {
-    Write-ToLog "Running with admin rights.`n"
+    Write-ToLog "Running with admin rights.`n" -LogWriter $LogWriter
 
     #Check/install prerequisites
     Install-Prerequisites
@@ -354,7 +359,7 @@ if ($IsElevated -eq $True) {
     Add-ScopeMachine
 }
 else {
-    Write-ToLog "Running without admin rights.`n"
+    Write-ToLog "Running without admin rights.`n" -LogWriter $LogWriter
 
     #Get Winget command
     $Script:Winget = Get-WingetCmd
@@ -371,7 +376,7 @@ if ($Winget) {
         $AppID, $AppArgs = ($App_Full.Trim().Split(" ", 2))
 
         #Log current App
-        Write-ToLog "Start $AppID processing..." "Blue"
+        Write-ToLog "Start $AppID processing..." "Blue" -LogWriter $LogWriter
 
         #Install or Uninstall command
         if ($Uninstall) {
@@ -387,10 +392,16 @@ if ($Winget) {
         }
 
         #Log current App
-        Write-ToLog "$AppID processing finished!`n" "Blue"
+        Write-ToLog "$AppID processing finished!`n" "Blue" -LogWriter $LogWriter
         Start-Sleep 1
     }
 }
 
-Write-ToLog "###   END REQUEST   ###`n" "Magenta"
+Write-ToLog "###   END REQUEST   ###`n" "Magenta" -LogWriter $LogWriter
 Start-Sleep 3
+} finally {
+    if ($null -ne $LogWriter) {
+        $LogWriter.Dispose()
+    }
+    Remove-Variable -Name LogWriter -Scope Global -ErrorAction SilentlyContinue
+}

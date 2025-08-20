@@ -18,9 +18,13 @@ $Script:ProgressPreference = [System.Management.Automation.ActionPreference]::Si
 
 # Log initialization
 [string]$LogFile = [System.IO.Path]::Combine($Script:WorkingDir, 'logs', 'updates.log');
+$LogWriter = New-LogWriter -LogFile $LogFile
+$global:LogWriter = $LogWriter
+
+try {
 
 #region Get settings and Domain/Local Policies (GPO) if activated.
-Write-ToLog "Reading WAUConfig";
+Write-ToLog "Reading WAUConfig" -LogWriter $LogWriter;
 $Script:WAUConfig = Get-WAUConfig;
 #endregion Get settings and Domain/Local Policies (GPO) if activated.
 
@@ -34,7 +38,7 @@ $Script:WAUConfig = Get-WAUConfig;
 # Defining custom repository for winget tool
 if ($null -ne $Script:WAUConfig.WAU_WingetSourceCustom) {
     $Script:WingetSourceCustom = $Script:WAUConfig.WAU_WingetSourceCustom.Trim();
-    Write-ToLog "Selecting winget repository named '$($Script:WingetSourceCustom)'";
+    Write-ToLog "Selecting winget repository named '$($Script:WingetSourceCustom)'" -LogWriter $LogWriter;
 }
 #endregion Winget Source Custom
 
@@ -51,7 +55,7 @@ if ($true -eq $IsSystem) {
 
     #If log file doesn't exist, force create it
     if (!(Test-Path -Path $LogFile)) {
-        Write-ToLog "New log file created";
+        Write-ToLog "New log file created" -LogWriter $LogWriter;
     }
 
     # paths
@@ -66,13 +70,13 @@ if ($true -eq $IsSystem) {
         # Check if symlink WAU-updates.log exists, make symlink (doesn't work under ServiceUI)
         if (!(Test-Path -Path $fp0 -ErrorAction SilentlyContinue)) {
             New-Item -Path $fp0 -ItemType SymbolicLink -Value $LogFile -Force -ErrorAction SilentlyContinue | Out-Null;
-            Write-ToLog "SymLink for 'update' log file created in in $($IntuneLogsDir) folder";
+            Write-ToLog "SymLink for 'update' log file created in in $($IntuneLogsDir) folder" -LogWriter $LogWriter;
         }
 
         # Check if install.log and symlink WAU-install.log exists, make symlink (doesn't work under ServiceUI)
         if ( (Test-Path -Path $fp1 -ErrorAction SilentlyContinue) -and !(Test-Path -Path $fp2 -ErrorAction SilentlyContinue) ) {
             New-Item -Path $fp2 -ItemType SymbolicLink -Value $fp1 -Force -Confirm:$False -ErrorAction SilentlyContinue | Out-Null;
-            Write-ToLog "SymLink for 'install' log file created in $($IntuneLogsDir) folder"
+            Write-ToLog "SymLink for 'install' log file created in $($IntuneLogsDir) folder" -LogWriter $LogWriter
         }
         # Check if user install.log and symlink WAU-install-username.log exists, make symlink (doesn't work under ServiceUI)
         # Get all user directories from C:\Users (excluding default/system profiles)
@@ -92,7 +96,7 @@ if ($true -eq $IsSystem) {
                 # Create Symlink if it doesn't already exist
                 if (!(Test-Path -Path $UserLogLink -ErrorAction SilentlyContinue)) {
                     New-Item -Path $UserLogLink -ItemType SymbolicLink -Value $UserLogFile -Force -ErrorAction SilentlyContinue | Out-Null
-                    Write-ToLog "Created Symlink for user log: $UserLogLink -> $UserLogFile"
+                    Write-ToLog "Created Symlink for user log: $UserLogLink -> $UserLogFile" -LogWriter $LogWriter
                 }
             }
         }
@@ -107,7 +111,7 @@ if ($true -eq $IsSystem) {
             #Check if any connected user
             $explorerprocesses = @(Get-CimInstance -Query "SELECT * FROM Win32_Process WHERE Name='explorer.exe'" -ErrorAction SilentlyContinue);
             if ($explorerprocesses.Count -gt 0) {
-                Write-ToLog "Rerun WAU in system context with ServiceUI";
+                Write-ToLog "Rerun WAU in system context with ServiceUI" -LogWriter $LogWriter;
                 Start-Process `
                     -FilePath $fp3 `
                     -ArgumentList "-process:explorer.exe $env:windir\System32\conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File winget-upgrade.ps1" `
@@ -116,19 +120,19 @@ if ($true -eq $IsSystem) {
                 Exit 0;
             }
             else {
-                Write-ToLog -LogMsg "CHECK FOR APP UPDATES (System context)" -IsHeader
+                Write-ToLog -LogMsg "CHECK FOR APP UPDATES (System context)" -IsHeader -LogWriter $LogWriter
             }
         }
         else {
-            Write-ToLog -LogMsg "CHECK FOR APP UPDATES (System context - No ServiceUI)" -IsHeader
+            Write-ToLog -LogMsg "CHECK FOR APP UPDATES (System context - No ServiceUI)" -IsHeader -LogWriter $LogWriter
         }
     }
     else {
-        Write-ToLog -LogMsg "CHECK FOR APP UPDATES (System context - Connected user)" -IsHeader
+        Write-ToLog -LogMsg "CHECK FOR APP UPDATES (System context - Connected user)" -IsHeader -LogWriter $LogWriter
     }
 }
 else {
-    Write-ToLog -LogMsg "CHECK FOR APP UPDATES (User context)" -IsHeader
+    Write-ToLog -LogMsg "CHECK FOR APP UPDATES (User context)" -IsHeader -LogWriter $LogWriter
 }
 
 #region Log running context
@@ -155,7 +159,7 @@ if ($true -eq $IsSystem) {
     #LogRotation if System
     [bool]$LogRotate = Invoke-LogRotation $LogFile $MaxLogFiles $MaxLogSize;
     if ($false -eq $LogRotate) {
-        Write-ToLog "An Exception occurred during Log Rotation..."
+        Write-ToLog "An Exception occurred during Log Rotation..." -LogWriter $LogWriter
     }
 }
 #endregion Log running context
@@ -168,7 +172,7 @@ if ($true -eq $IsSystem) {
 
 #region Get Notif Locale function
 [string]$LocaleDisplayName = Get-NotifLocale;
-Write-ToLog "Notification Level: $($WAUConfig.WAU_NotificationLevel). Notification Language: $LocaleDisplayName" "Cyan";
+Write-ToLog "Notification Level: $($WAUConfig.WAU_NotificationLevel). Notification Language: $LocaleDisplayName" "Cyan" -LogWriter $LogWriter;
 #endregion
 
 #Check network connectivity
@@ -181,7 +185,7 @@ if (Test-Network) {
 
     #Check if Winget is installed and get Winget cmd
     [string]$Script:Winget = Get-WingetCmd;
-    Write-ToLog "Selected winget instance: $($Script:Winget)";
+    Write-ToLog "Selected winget instance: $($Script:Winget)" -LogWriter $LogWriter;
 
     if ($Script:Winget) {
 
@@ -189,26 +193,26 @@ if (Test-Network) {
 
             #Get Current Version
             $WAUCurrentVersion = $WAUConfig.ProductVersion;
-            Write-ToLog "WAU current version: $WAUCurrentVersion";
+            Write-ToLog "WAU current version: $WAUCurrentVersion" -LogWriter $LogWriter;
 
             #Check if WAU update feature is enabled or not if run as System
             $WAUDisableAutoUpdate = $WAUConfig.WAU_DisableAutoUpdate;
             #If yes then check WAU update if run as System
             if ($WAUDisableAutoUpdate -eq 1) {
-                Write-ToLog "WAU AutoUpdate is Disabled." "Gray";
+                Write-ToLog "WAU AutoUpdate is Disabled." "Gray" -LogWriter $LogWriter;
             }
             else {
-                Write-ToLog "WAU AutoUpdate is Enabled." "Green";
+                Write-ToLog "WAU AutoUpdate is Enabled." "Green" -LogWriter $LogWriter;
                 #Get Available Version
                 $Script:WAUAvailableVersion = Get-WAUAvailableVersion;
                 #Compare
                 if ((Compare-SemVer -Version1 $WAUCurrentVersion -Version2 $WAUAvailableVersion) -lt 0) {
                     #If new version is available, update it
-                    Write-ToLog "WAU Available version: $WAUAvailableVersion" "DarkYellow";
+                    Write-ToLog "WAU Available version: $WAUAvailableVersion" "DarkYellow" -LogWriter $LogWriter;
                     Update-WAU;
                 }
                 else {
-                    Write-ToLog "WAU is up to date." "Green";
+                    Write-ToLog "WAU is up to date." "Green" -LogWriter $LogWriter;
                 }
             }
 
@@ -221,41 +225,41 @@ if (Test-Network) {
             #Get External ListPath if run as System
             if ($WAUConfig.WAU_ListPath) {
                 $ListPathClean = $($WAUConfig.WAU_ListPath.TrimEnd(" ", "\", "/"))
-                Write-ToLog "WAU uses External Lists from: $ListPathClean"
+                Write-ToLog "WAU uses External Lists from: $ListPathClean" -LogWriter $LogWriter
                 if ($ListPathClean -ne "GPO") {
                     $NewList = Test-ListPath $ListPathClean $WAUConfig.WAU_UseWhiteList $WAUConfig.InstallLocation.TrimEnd(" ", "\")
                     if ($ReachNoPath) {
-                        Write-ToLog "Couldn't reach/find/compare/copy from $ListPathClean..." "Red"
+                        Write-ToLog "Couldn't reach/find/compare/copy from $ListPathClean..." "Red" -LogWriter $LogWriter
                         if ($ListPathClean -notlike "http*") {
                             if (Test-Path -Path "$ListPathClean" -PathType Leaf) {
-                                Write-ToLog "PATH must end with a Directory, not a File..." "Red"
+                                Write-ToLog "PATH must end with a Directory, not a File..." "Red" -LogWriter $LogWriter
                             }
                         }
                         else {
                             if ($ListPathClean -match "_apps.txt") {
-                                Write-ToLog "PATH must end with a Directory, not a File..." "Red"
+                                Write-ToLog "PATH must end with a Directory, not a File..." "Red" -LogWriter $LogWriter
                             }
                         }
                         $Script:ReachNoPath = $False
                     }
                     if ($NewList) {
                         if ($AlwaysDownloaded) {
-                            Write-ToLog "List downloaded/copied to local path: $($WAUConfig.InstallLocation.TrimEnd(" ", "\"))" "DarkYellow"
+                            Write-ToLog "List downloaded/copied to local path: $($WAUConfig.InstallLocation.TrimEnd(" ", "\"))" "DarkYellow" -LogWriter $LogWriter
                         }
                         else {
-                            Write-ToLog "Newer List downloaded/copied to local path: $($WAUConfig.InstallLocation.TrimEnd(" ", "\"))" "DarkYellow"
+                            Write-ToLog "Newer List downloaded/copied to local path: $($WAUConfig.InstallLocation.TrimEnd(" ", "\"))" "DarkYellow" -LogWriter $LogWriter
                         }
                         $Script:AlwaysDownloaded = $False
                     }
                     else {
                         if ($WAUConfig.WAU_UseWhiteList -and (Test-Path "$WorkingDir\included_apps.txt")) {
-                            Write-ToLog "List (white) is up to date." "Green"
+                            Write-ToLog "List (white) is up to date." "Green" -LogWriter $LogWriter
                         }
                         elseif (!$WAUConfig.WAU_UseWhiteList -and (Test-Path "$WorkingDir\excluded_apps.txt")) {
-                            Write-ToLog "List (black) is up to date." "Green"
+                            Write-ToLog "List (black) is up to date." "Green" -LogWriter $LogWriter
                         }
                         else {
-                            Write-ToLog "Critical: White/Black List doesn't exist, exiting..." "Red"
+                            Write-ToLog "Critical: White/Black List doesn't exist, exiting..." "Red" -LogWriter $LogWriter
                             New-Item "$WorkingDir\logs\error.txt" -Value "White/Black List doesn't exist" -Force
                             Exit 1
                         }
@@ -266,7 +270,7 @@ if (Test-Network) {
             #Get External ModsPath if run as System
             if ($WAUConfig.WAU_ModsPath) {
                 $ModsPathClean = $($WAUConfig.WAU_ModsPath.TrimEnd(" ", "\", "/"))
-                Write-ToLog "WAU uses External Mods from: $ModsPathClean"
+                Write-ToLog "WAU uses External Mods from: $ModsPathClean" -LogWriter $LogWriter
                 if ($WAUConfig.WAU_AzureBlobSASURL) {
                     $NewMods, $DeletedMods = Test-ModsPath $ModsPathClean $WAUConfig.InstallLocation.TrimEnd(" ", "\") $WAUConfig.WAU_AzureBlobSASURL.TrimEnd(" ")
                 }
@@ -274,29 +278,29 @@ if (Test-Network) {
                     $NewMods, $DeletedMods = Test-ModsPath $ModsPathClean $WAUConfig.InstallLocation.TrimEnd(" ", "\")
                 }
                 if ($ReachNoPath) {
-                    Write-ToLog "Couldn't reach/find/compare/copy from $ModsPathClean..." "Red"
+                    Write-ToLog "Couldn't reach/find/compare/copy from $ModsPathClean..." "Red" -LogWriter $LogWriter
                     $Script:ReachNoPath = $False
                 }
                 if ($NewMods -gt 0) {
-                    Write-ToLog "$NewMods newer Mods downloaded/copied to local path: $($WAUConfig.InstallLocation.TrimEnd(" ", "\"))\mods" "DarkYellow"
+                    Write-ToLog "$NewMods newer Mods downloaded/copied to local path: $($WAUConfig.InstallLocation.TrimEnd(" ", "\"))\mods" "DarkYellow" -LogWriter $LogWriter
                 }
                 else {
                     if (Test-Path "$WorkingDir\mods\*.ps1") {
-                        Write-ToLog "Mods are up to date." "Green"
+                        Write-ToLog "Mods are up to date." "Green" -LogWriter $LogWriter
                     }
                     else {
-                        Write-ToLog "No Mods are implemented..." "DarkYellow"
+                        Write-ToLog "No Mods are implemented..." "DarkYellow" -LogWriter $LogWriter
                     }
                 }
                 if ($DeletedMods -gt 0) {
-                    Write-ToLog "$DeletedMods Mods deleted (not externally managed) from local path: $($WAUConfig.InstallLocation.TrimEnd(" ", "\"))\mods" "Red"
+                    Write-ToLog "$DeletedMods Mods deleted (not externally managed) from local path: $($WAUConfig.InstallLocation.TrimEnd(" ", "\"))\mods" "Red" -LogWriter $LogWriter
                 }
             }
 
             # Test if _WAU-mods.ps1 exist: Mods for WAU (if Network is active/any Winget is installed/running as SYSTEM)
             $Mods = "$WorkingDir\mods"
             if (Test-Path "$Mods\_WAU-mods.ps1") {
-                Write-ToLog "Running Mods for WAU..." "DarkYellow"
+                Write-ToLog "Running Mods for WAU..." "DarkYellow" -LogWriter $LogWriter
                 Test-WAUMods -WorkingDir $WorkingDir -WAUConfig $WAUConfig -GitHub_Repo $GitHub_Repo
             }
 
@@ -308,12 +312,12 @@ if (Test-Network) {
 
         #Get White or Black list
         if ($WAUConfig.WAU_UseWhiteList -eq 1) {
-            Write-ToLog "WAU uses White List config"
+            Write-ToLog "WAU uses White List config" -LogWriter $LogWriter
             $toUpdate = Get-IncludedApps
             $UseWhiteList = $true
         }
         else {
-            Write-ToLog "WAU uses Black List config"
+            Write-ToLog "WAU uses Black List config" -LogWriter $LogWriter
             $toSkip = Get-ExcludedApps
         }
 
@@ -321,29 +325,29 @@ if (Test-Network) {
         if ($GPOList) {
             if ($UseWhiteList) {
                 if (-not $toUpdate) {
-                    Write-ToLog "Critical: Whitelist doesn't exist in GPO, exiting..." "Red"
+                    Write-ToLog "Critical: Whitelist doesn't exist in GPO, exiting..." "Red" -LogWriter $LogWriter
                     New-Item "$WorkingDir\logs\error.txt" -Value "Whitelist doesn't exist in GPO" -Force
                     Exit 1
                 }
-                foreach ($app in $toUpdate) { Write-ToLog "Include app ${app}" }
+                foreach ($app in $toUpdate) { Write-ToLog "Include app ${app}" } -LogWriter $LogWriter
             }
             else {
                 if (-not $toSkip) {
-                    Write-ToLog "Critical: Blacklist doesn't exist in GPO, exiting..." "Red"
+                    Write-ToLog "Critical: Blacklist doesn't exist in GPO, exiting..." "Red" -LogWriter $LogWriter
                     New-Item "$WorkingDir\logs\error.txt" -Value "Blacklist doesn't exist in GPO" -Force
                     Exit 1
                 }
-                foreach ($app in $toSkip) { Write-ToLog "Exclude app ${app}" }
+                foreach ($app in $toSkip) { Write-ToLog "Exclude app ${app}" } -LogWriter $LogWriter
             }
         }
 
         #Get outdated Winget packages
-        Write-ToLog "Checking application updates on Winget Repository named '$($Script:WingetSourceCustom)' .." "DarkYellow"
+        Write-ToLog "Checking application updates on Winget Repository named '$($Script:WingetSourceCustom)' .." "DarkYellow" -LogWriter $LogWriter
         $outdated = Get-WingetOutdatedApps -src $Script:WingetSourceCustom;
 
         #If something unusual happened or no update found
         if ($outdated -like "No update found.*") {
-            Write-ToLog "$outdated" "cyan"
+            Write-ToLog "$outdated" "cyan" -LogWriter $LogWriter
         }
         #Run only if $outdated is populated!
         else {
@@ -360,7 +364,7 @@ if (Test-Network) {
 
             #Trick under user context when -BypassListForUsers is used
             if ($IsSystem -eq $false -and $WAUConfig.WAU_BypassListForUsers -eq 1) {
-                Write-ToLog "Bypass system list in user context is Enabled."
+                Write-ToLog "Bypass system list in user context is Enabled." -LogWriter $LogWriter
                 $UseWhiteList = $false
                 $toSkip = $null
             }
@@ -371,7 +375,7 @@ if (Test-Network) {
                 foreach ($app in $outdated) {
                     #if current app version is unknown, skip it
                     if ($($app.Version) -eq "Unknown") {
-                        Write-ToLog "$($app.Name) : Skipped upgrade because current version is 'Unknown'" "Gray"
+                        Write-ToLog "$($app.Name) : Skipped upgrade because current version is 'Unknown'" "Gray" -LogWriter $LogWriter
                     }
                     #if app is in "include list", update it
                     elseif ($toUpdate -contains $app.Id) {
@@ -379,12 +383,12 @@ if (Test-Network) {
                     }
                     #if app with wildcard is in "include list", update it
                     elseif ($toUpdate | Where-Object { $app.Id -like $_ }) {
-                        Write-ToLog "$($app.Name) is wildcard in the include list."
+                        Write-ToLog "$($app.Name) is wildcard in the include list." -LogWriter $LogWriter
                         Update-App $app
                     }
                     #else, skip it
                     else {
-                        Write-ToLog "$($app.Name) : Skipped upgrade because it is not in the included app list" "Gray"
+                        Write-ToLog "$($app.Name) : Skipped upgrade because it is not in the included app list" "Gray" -LogWriter $LogWriter
                     }
                 }
             }
@@ -394,15 +398,15 @@ if (Test-Network) {
                 foreach ($app in $outdated) {
                     #if current app version is unknown, skip it
                     if ($($app.Version) -eq "Unknown") {
-                        Write-ToLog "$($app.Name) : Skipped upgrade because current version is 'Unknown'" "Gray"
+                        Write-ToLog "$($app.Name) : Skipped upgrade because current version is 'Unknown'" "Gray" -LogWriter $LogWriter
                     }
                     #if app is in "excluded list", skip it
                     elseif ($toSkip -contains $app.Id) {
-                        Write-ToLog "$($app.Name) : Skipped upgrade because it is in the excluded app list" "Gray"
+                        Write-ToLog "$($app.Name) : Skipped upgrade because it is in the excluded app list" "Gray" -LogWriter $LogWriter
                     }
                     #if app with wildcard is in "excluded list", skip it
                     elseif ($toSkip | Where-Object { $app.Id -like $_ }) {
-                        Write-ToLog "$($app.Name) : Skipped upgrade because it is *wildcard* in the excluded app list" "Gray"
+                        Write-ToLog "$($app.Name) : Skipped upgrade because it is *wildcard* in the excluded app list" "Gray" -LogWriter $LogWriter
                     }
                     # else, update it
                     else {
@@ -412,18 +416,18 @@ if (Test-Network) {
             }
 
             if ($InstallOK -gt 0) {
-                Write-ToLog "$InstallOK apps updated ! No more update." "Green"
+                Write-ToLog "$InstallOK apps updated ! No more update." "Green" -LogWriter $LogWriter
             }
         }
 
         if ($InstallOK -eq 0 -or !$InstallOK) {
-            Write-ToLog "No new update." "Green"
+            Write-ToLog "No new update." "Green" -LogWriter $LogWriter
         }
 
         # Test if _WAU-mods-postsys.ps1 exists: Mods for WAU (postsys) - if Network is active/any Winget is installed/running as SYSTEM _after_ SYSTEM updates
         if ($true -eq $IsSystem) {
             if (Test-Path "$Mods\_WAU-mods-postsys.ps1") {
-                Write-ToLog "Running Mods (postsys) for WAU..." "DarkYellow"
+                Write-ToLog "Running Mods (postsys) for WAU..." "DarkYellow" -LogWriter $LogWriter
                 & "$Mods\_WAU-mods-postsys.ps1"
             }
         }
@@ -435,28 +439,34 @@ if (Test-Network) {
 
             $explorerprocesses = @(Get-CimInstance -Query "SELECT * FROM Win32_Process WHERE Name='explorer.exe'" -ErrorAction SilentlyContinue)
             If ($explorerprocesses.Count -eq 0) {
-                Write-ToLog "No explorer process found / Nobody interactively logged on..."
+                Write-ToLog "No explorer process found / Nobody interactively logged on..." -LogWriter $LogWriter
             }
             Else {
                 #Get Winget system apps to escape them before running user context
-                Write-ToLog "User logged on, get a list of installed Winget apps in System context..."
+                Write-ToLog "User logged on, get a list of installed Winget apps in System context..." -LogWriter $LogWriter
                 Get-WingetSystemApps -src $Script:WingetSourceCustom;
 
                 #Run user context scheduled task
-                Write-ToLog "Starting WAU in User context..."
+                Write-ToLog "Starting WAU in User context..." -LogWriter $LogWriter
                 $null = $UserContextTask | Start-ScheduledTask -ErrorAction SilentlyContinue
                 Exit 0
             }
         }
     }
     else {
-        Write-ToLog "Critical: Winget not installed or detected, exiting..." "red"
+        Write-ToLog "Critical: Winget not installed or detected, exiting..." "red" -LogWriter $LogWriter
         New-Item "$WorkingDir\logs\error.txt" -Value "Winget not installed or detected" -Force
-        Write-ToLog "End of process!" "Cyan"
+        Write-ToLog "End of process!" "Cyan" -LogWriter $LogWriter
         Exit 1
     }
 }
 
 #End
-Write-ToLog "End of process!" "Cyan"
+Write-ToLog "End of process!" "Cyan" -LogWriter $LogWriter
 Start-Sleep 3
+} finally {
+    if ($null -ne $LogWriter) {
+        $LogWriter.Dispose()
+    }
+    Remove-Variable -Name LogWriter -Scope Global -ErrorAction SilentlyContinue
+}
